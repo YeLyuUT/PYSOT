@@ -223,6 +223,13 @@ def resnet50(**kwargs):
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     return model
 
+def resnet101(**kwargs):
+    """Constructs a ResNet-101 model.
+
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
+    return model
+
 
 if __name__ == '__main__':
     net = resnet50()

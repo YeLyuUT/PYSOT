@@ -50,6 +50,31 @@ class UPChannelRPN(RPN):
         loc = self.loc_adjust(xcorr_fast(loc_feature, loc_kernel))
         return cls, loc
 
+class GroupCorrRPN(nn.Module):
+    def __init__(self, inchannels, hidden, n_group, kernel_size=3, anchor_num=5):
+        super(GroupCorrRPN, self).__init__()
+        self.conv_kernel = nn.Sequential(
+            nn.Conv2d(inchannels, hidden*n_group, kernel_size=kernel_size, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.ReLU(inplace=True),
+            )
+        self.conv_search = nn.Sequential(
+            nn.Conv2d(inchannels, hidden, kernel_size=kernel_size, bias=False),
+            nn.BatchNorm2d(hidden),
+            nn.ReLU(inplace=True),
+        )
+        cls_output = 2 * anchor_num
+        loc_output = 4 * anchor_num
+        self.loc_adjust = nn.Conv2d(n_group, loc_output, kernel_size=1)
+        self.cls_adjust = nn.Conv2d(n_group, cls_output, kernel_size=1)
+
+    def forward(self, kernel, search):
+        kernel = self.conv_kernel(kernel)
+        search = self.conv_search(search)
+        middle_feat = xcorr_fast(search, kernel)
+        cls = self.cls_adjust(middle_feat)
+        loc = self.loc_adjust(middle_feat)
+        return cls, loc
 
 class DepthwiseXCorr(nn.Module):
     def __init__(self, in_channels, hidden, out_channels, kernel_size=3, hidden_kernel_size=5):

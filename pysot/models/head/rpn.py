@@ -55,7 +55,7 @@ class GroupCorrRPN(nn.Module):
         super(GroupCorrRPN, self).__init__()
         self.conv_kernel = nn.Sequential(
             nn.Conv2d(inchannels, hidden*n_group, kernel_size=kernel_size, bias=False),
-            nn.BatchNorm2d(hidden),
+            nn.BatchNorm2d(hidden*n_group),
             nn.ReLU(inplace=True),
             )
         self.conv_search = nn.Sequential(
@@ -116,7 +116,6 @@ class DepthwiseRPN(RPN):
         loc = self.loc(z_f, x_f)
         return cls, loc
 
-
 class MultiRPN(RPN):
     def __init__(self, anchor_num, in_channels, weighted=False):
         super(MultiRPN, self).__init__()
@@ -124,6 +123,44 @@ class MultiRPN(RPN):
         for i in range(len(in_channels)):
             self.add_module('rpn'+str(i+2),
                     DepthwiseRPN(anchor_num, in_channels[i], in_channels[i]))
+        if self.weighted:
+            self.cls_weight = nn.Parameter(torch.ones(len(in_channels)))
+            self.loc_weight = nn.Parameter(torch.ones(len(in_channels)))
+
+    def forward(self, z_fs, x_fs):
+        cls = []
+        loc = []
+        for idx, (z_f, x_f) in enumerate(zip(z_fs, x_fs), start=2):
+            rpn = getattr(self, 'rpn'+str(idx))
+            c, l = rpn(z_f, x_f)
+            cls.append(c)
+            loc.append(l)
+
+        if self.weighted:
+            cls_weight = F.softmax(self.cls_weight, 0)
+            loc_weight = F.softmax(self.loc_weight, 0)
+
+        def avg(lst):
+            return sum(lst) / len(lst)
+
+        def weighted_avg(lst, weight):
+            s = 0
+            for i in range(len(weight)):
+                s += lst[i] * weight[i]
+            return s
+
+        if self.weighted:
+            return weighted_avg(cls, cls_weight), weighted_avg(loc, loc_weight)
+        else:
+            return avg(cls), avg(loc)
+            
+class MultiGroupRPN(RPN):
+    def __init__(self, n_group, anchor_num, in_channels, weighted=False):
+        super(MultiGroupRPN, self).__init__()
+        self.weighted = weighted
+        for i in range(len(in_channels)):
+            self.add_module('rpn'+str(i+2), 
+            GroupCorrRPN(in_channels[i], in_channels[i], n_group=n_group, anchor_num=anchor_num))
         if self.weighted:
             self.cls_weight = nn.Parameter(torch.ones(len(in_channels)))
             self.loc_weight = nn.Parameter(torch.ones(len(in_channels)))

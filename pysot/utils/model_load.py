@@ -13,7 +13,7 @@ import torch
 logger = logging.getLogger('global')
 
 
-def check_keys(model, pretrained_state_dict):
+def check_keys(model, pretrained_state_dict, can_skip_shape_mismatched_weights=False):
     ckpt_keys = set(pretrained_state_dict.keys())
     model_keys = set(model.state_dict().keys())
     used_pretrained_keys = model_keys & ckpt_keys
@@ -22,6 +22,17 @@ def check_keys(model, pretrained_state_dict):
     # filter 'num_batches_tracked'
     missing_keys = [x for x in missing_keys
                     if not x.endswith('num_batches_tracked')]
+    keys_of_weights_with_unmatching_shape=[]
+    for key in used_pretrained_keys:
+        if model.state_dict()[key].shape!=pretrained_state_dict[key].shape:
+            keys_of_weights_with_unmatching_shape.append(key)
+    keys_of_weights_with_unmatching_shape = set(keys_of_weights_with_unmatching_shape)
+    if can_skip_shape_mismatched_weights:
+        for key in keys_of_weights_with_unmatching_shape:
+            pretrained_state_dict.pop(key)
+    if len(keys_of_weights_with_unmatching_shape)>0:
+        logger.info('[Warning] weight shape mismatched keys: {}'.format(keys_of_weights_with_unmatching_shape))
+        logger.info('weight shape mismatched keys:{}'.format(len(keys_of_weights_with_unmatching_shape)))
     if len(missing_keys) > 0:
         logger.info('[Warning] missing keys: {}'.format(missing_keys))
         logger.info('missing keys:{}'.format(len(missing_keys)))
@@ -50,13 +61,12 @@ def load_pretrain(model, pretrained_path):
     pretrained_dict = torch.load(pretrained_path,
         map_location=lambda storage, loc: storage.cuda(device))
     if "state_dict" in pretrained_dict.keys():
-        pretrained_dict = remove_prefix(pretrained_dict['state_dict'],
-                                        'module.')
+        pretrained_dict = remove_prefix(pretrained_dict['state_dict'], 'module.')
     else:
         pretrained_dict = remove_prefix(pretrained_dict, 'module.')
 
     try:
-        check_keys(model, pretrained_dict)
+        check_keys(model, pretrained_dict, can_skip_shape_mismatched_weights=True)
     except:
         logger.info('[Warning]: using pretrain as features.\
                 Adding "features." as prefix')

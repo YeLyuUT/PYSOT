@@ -24,8 +24,9 @@ def check_keys(model, pretrained_state_dict, can_skip_shape_mismatched_weights=F
                     if not x.endswith('num_batches_tracked')]
     keys_of_weights_with_unmatching_shape=[]
     for key in used_pretrained_keys:
-        if model.state_dict()[key].shape!=pretrained_state_dict[key].shape:
-            keys_of_weights_with_unmatching_shape.append(key)
+        if hasattr(model.state_dict()[key],'shape'):
+          if model.state_dict()[key].shape!=pretrained_state_dict[key].shape:
+              keys_of_weights_with_unmatching_shape.append(key)
     keys_of_weights_with_unmatching_shape = set(keys_of_weights_with_unmatching_shape)
     if can_skip_shape_mismatched_weights:
         for key in keys_of_weights_with_unmatching_shape:

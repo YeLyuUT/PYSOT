@@ -65,8 +65,18 @@ class GroupCorrRPN(nn.Module):
         )
         cls_output = 2 * anchor_num
         loc_output = 4 * anchor_num
-        self.loc_adjust = nn.Conv2d(n_group, loc_output, kernel_size=1)
-        self.cls_adjust = nn.Conv2d(n_group, cls_output, kernel_size=1)
+        self.loc_adjust = nn.Sequential(
+                nn.Conv2d(n_group, n_group, kernel_size=1, bias=False),
+                nn.BatchNorm2d(n_group),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(n_group, loc_output, kernel_size=1)
+                )
+        self.cls_adjust = nn.Sequential(
+                nn.Conv2d(n_group, n_group, kernel_size=1, bias=False),
+                nn.BatchNorm2d(n_group),
+                nn.ReLU(inplace=True),
+                nn.Conv2d(n_group, cls_output, kernel_size=1)
+                )
 
     def forward(self, kernel, search):
         kernel = self.conv_kernel(kernel)

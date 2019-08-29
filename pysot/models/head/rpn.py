@@ -50,9 +50,9 @@ class UPChannelRPN(RPN):
         loc = self.loc_adjust(xcorr_fast(loc_feature, loc_kernel))
         return cls, loc
 
-class GroupCorrRPN(nn.Module):
-    def __init__(self, inchannels, hidden, n_group, kernel_size=3, anchor_num=5):
-        super(GroupCorrRPN, self).__init__()
+class GroupCorr(nn.Module):
+    def __init__(self, inchannels, hidden, out_channels, n_group, kernel_size=3, anchor_num=5):
+        super(GroupCorr, self).__init__()
         self.conv_kernel = nn.Sequential(
             nn.Conv2d(inchannels, hidden*n_group, kernel_size=kernel_size, bias=False),
             nn.BatchNorm2d(hidden*n_group),
@@ -63,27 +63,29 @@ class GroupCorrRPN(nn.Module):
             nn.BatchNorm2d(hidden),
             nn.ReLU(inplace=True),
         )
-        cls_output = 2 * anchor_num
-        loc_output = 4 * anchor_num
-        self.loc_adjust = nn.Sequential(
+        self.head = nn.Sequential(
                 nn.Conv2d(n_group, n_group, kernel_size=1, bias=False),
                 nn.BatchNorm2d(n_group),
                 nn.ReLU(inplace=True),
-                nn.Conv2d(n_group, loc_output, kernel_size=1)
-                )
-        self.cls_adjust = nn.Sequential(
-                nn.Conv2d(n_group, n_group, kernel_size=1, bias=False),
-                nn.BatchNorm2d(n_group),
-                nn.ReLU(inplace=True),
-                nn.Conv2d(n_group, cls_output, kernel_size=1)
+                nn.Conv2d(n_group, out_channels, kernel_size=1)
                 )
 
     def forward(self, kernel, search):
         kernel = self.conv_kernel(kernel)
         search = self.conv_search(search)
         middle_feat = xcorr_fast(search, kernel)
-        cls = self.cls_adjust(middle_feat)
-        loc = self.loc_adjust(middle_feat)
+        out = self.head(middle_feat)
+        return out
+
+class GroupCorrRPN(RPN):
+    def __init__(self, in_channels=256, out_channels=256, n_group=32, anchor_num=5):
+        super(GroupCorrRPN, self).__init__()
+        self.cls = GroupCorr(in_channels, out_channels, 2 * anchor_num, n_group)
+        self.loc = GroupCorr(in_channels, out_channels, 4 * anchor_num, n_group)
+
+    def forward(self, z_f, x_f):
+        cls = self.cls(z_f, x_f)
+        loc = self.loc(z_f, x_f)
         return cls, loc
 
 class DepthwiseXCorr(nn.Module):
